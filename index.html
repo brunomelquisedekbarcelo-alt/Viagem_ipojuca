@@ -8,7 +8,72 @@
 
 <title>Planejamento da Viagem - Ipojuca</title>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <style>
+
+#mapa{
+    width:100%;
+    height:420px;
+    border-radius:12px;
+    margin-top:20px;
+    z-index:0;
+}
+
+.links-mapa{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin-top:8px;
+}
+
+.links-mapa a{
+    display:block;
+    text-align:center;
+    padding:7px 10px;
+    border-radius:6px;
+    background:#0f766e;
+    color:white !important;
+    text-decoration:none;
+    font-weight:bold;
+}
+
+.lista-pontos{
+    margin-top:15px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+}
+
+.lista-pontos button{
+    border:1px solid #0f766e;
+    background:white;
+    color:#0f766e;
+    padding:8px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:bold;
+}
+
+.busca{
+    width:100%;
+    padding:10px;
+    border:1px solid #ccc;
+    border-radius:8px;
+    margin-bottom:15px;
+    font-size:15px;
+}
+
+.total{
+    margin-bottom:10px;
+    color:#555;
+}
+
+.tabela-wrap{
+    overflow-x:auto;
+}
+
 
 *{
     margin:0;
@@ -184,6 +249,11 @@ onclick="abrirAba('ingredientes',this)">
 🛒 Ingredientes
 </button>
 
+<button class="tab"
+onclick="abrirAba('passageiros',this)">
+🧍 Passageiros
+</button>
+
 </div>
 
 <div id="viagem" class="aba ativa">
@@ -210,6 +280,10 @@ onclick="abrirAba('ingredientes',this)">
 <div class="card"></div>
 </div>
 
+<div id="passageiros" class="aba">
+<div class="card"></div>
+</div>
+
 </div>
 
 <script>
@@ -222,8 +296,13 @@ const GIDS = {
     almoco: 674787523,
     lanche: 1639570066,
     jantar: 1151968492,
-    ingredientes: 896032985
+    ingredientes: 896032985,
+    passageiros: 392401811
 };
+
+let mapa = null;
+let camadaMarcadores = null;
+let dadosPassageiros = { cabecalho: [], linhas: [] };
 
 function abrirAba(id, btn) {
 
@@ -237,6 +316,121 @@ function abrirAba(id, btn) {
         .classList.add("ativa");
 
     btn.classList.add("active");
+
+    // O Leaflet precisa recalcular o tamanho quando a aba fica visível
+    if (id === "viagem" && mapa)
+        setTimeout(() => mapa.invalidateSize(), 50);
+}
+
+function valorCelula(c) {
+    if (!c) return "";
+    if (c.f != null) return c.f;
+    return c.v ?? "";
+}
+
+function escapar(txt) {
+    return String(txt)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+/* Procura coordenadas na linha. Aceita:
+   - "-8.4012, -34.9876" numa célula
+   - latitude numa coluna e longitude na seguinte
+   - link do Google Maps contendo @lat,lng ou q=lat,lng */
+function extrairCoordenada(row) {
+
+    const valores = row.c.map(c => c ? c.v : null);
+
+    const regex = /(-?\d{1,2}[.,]\d+)\s*[,;]\s*(-?\d{1,3}[.,]\d+)/;
+
+    for (const v of valores) {
+        if (typeof v !== "string") continue;
+        const m = v.match(/[@=](-?\d+\.\d+),\s*(-?\d+\.\d+)/) ||
+                  v.replace(/\s+/g, " ").match(regex);
+        if (m) {
+            const lat = parseFloat(m[1].replace(",", "."));
+            const lng = parseFloat(m[2].replace(",", "."));
+            if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180)
+                return { lat, lng };
+        }
+    }
+
+    const ehDecimal = v => {
+        if (v == null || v === "") return null;
+        const s = String(v).trim().replace(",", ".");
+        if (!/^-?\d+\.\d+$/.test(s)) return null;
+        return parseFloat(s);
+    };
+
+    for (let i = 1; i < valores.length - 1; i++) {
+        const lat = ehDecimal(valores[i]);
+        const lng = ehDecimal(valores[i + 1]);
+        if (lat !== null && lng !== null &&
+            Math.abs(lat) <= 90 && Math.abs(lng) <= 180)
+            return { lat, lng };
+    }
+
+    return null;
+}
+
+function linksNavegacao(p) {
+
+    const coord = `${p.lat},${p.lng}`;
+    const nome = encodeURIComponent(p.nome);
+
+    return `
+        <div class="links-mapa">
+            <a href="https://www.google.com/maps/search/?api=1&query=${coord}" target="_blank" rel="noopener">Google Maps</a>
+            <a href="https://waze.com/ul?ll=${coord}&navigate=yes" target="_blank" rel="noopener">Waze</a>
+            <a href="https://maps.apple.com/?ll=${coord}&q=${nome}" target="_blank" rel="noopener">Apple Mapas</a>
+            <a href="geo:${coord}?q=${coord}(${nome})">Outro app (Android)</a>
+        </div>
+    `;
+}
+
+function desenharMapa(pontos) {
+
+    if (typeof L === "undefined") {
+        document.getElementById("mapa").innerHTML =
+            '<div class="erro">Não foi possível carregar o mapa.</div>';
+        return;
+    }
+
+    if (!mapa) {
+        mapa = L.map("mapa");
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap"
+        }).addTo(mapa);
+        camadaMarcadores = L.layerGroup().addTo(mapa);
+    }
+
+    camadaMarcadores.clearLayers();
+
+    const marcadores = pontos.map(p =>
+        L.marker([p.lat, p.lng])
+            .bindPopup(`<strong>${escapar(p.nome)}</strong>${linksNavegacao(p)}`)
+            .addTo(camadaMarcadores)
+    );
+
+    if (pontos.length === 1)
+        mapa.setView([pontos[0].lat, pontos[0].lng], 15);
+    else if (pontos.length > 1)
+        mapa.fitBounds(L.latLngBounds(pontos.map(p => [p.lat, p.lng])), { padding: [40, 40] });
+
+    document.querySelectorAll(".lista-pontos button")
+        .forEach((btn, i) => {
+            btn.onclick = () => {
+                mapa.setView([pontos[i].lat, pontos[i].lng], 16);
+                marcadores[i].openPopup();
+                document.getElementById("mapa").scrollIntoView({ behavior: "smooth" });
+            };
+        });
+
+    setTimeout(() => mapa.invalidateSize(), 50);
 }
 
 function montarURL(gid) {
@@ -271,10 +465,22 @@ async function carregarViagem() {
     let html =
         '<div class="card"><ul style="line-height:2">';
 
+    const pontos = [];
+
     json.table.rows.forEach(row => {
 
         if (!row.c || !row.c[0])
             return;
+
+        const coord = extrairCoordenada(row);
+
+        if (coord) {
+            pontos.push({
+                nome: String(row.c[0]?.v ?? `Ponto ${pontos.length + 1}`),
+                ...coord
+            });
+            return;
+        }
 
         html += `
             <li>
@@ -285,10 +491,128 @@ async function carregarViagem() {
 
     });
 
-    html += "</ul></div>";
+    html += "</ul>";
+
+    if (pontos.length) {
+        html += `
+            <h3 style="margin-top:20px;color:#0f766e">📌 Localizações</h3>
+            <p style="color:#555;font-size:14px">Toque em um marcador para abrir no app de mapas.</p>
+            <div class="lista-pontos">
+                ${pontos.map(p => `<button>${escapar(p.nome)}</button>`).join("")}
+            </div>
+            <div id="mapa"></div>
+        `;
+    }
+
+    html += "</div>";
+
+    // Remove a instância antiga do mapa antes de recriar o HTML
+    if (mapa) {
+        mapa.remove();
+        mapa = null;
+    }
 
     document.getElementById("viagem")
         .innerHTML = html;
+
+    if (pontos.length)
+        desenharMapa(pontos);
+}
+
+function formatarCPF(valor) {
+    let s = String(valor ?? "").replace(/\D/g, "");
+    if (!s) return String(valor ?? "");
+    s = s.padStart(11, "0");
+    if (s.length !== 11) return String(valor);
+    return s.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+}
+
+async function carregarPassageiros() {
+
+    const json = await carregarAba(GIDS.passageiros);
+
+    const cols = json.table.cols || [];
+    let rows = json.table.rows || [];
+
+    // Cabeçalho: usa os rótulos das colunas; se vierem vazios, usa a 1ª linha
+    let cabecalho = cols.map(c => c.label || "");
+
+    if (cabecalho.every(l => !l) && rows.length) {
+        cabecalho = rows[0].c.map(c => String(c?.v ?? ""));
+        rows = rows.slice(1);
+    }
+
+    const idxCPF = cabecalho.findIndex(h => /cpf/i.test(h));
+
+    // Remove colunas totalmente vazias
+    const colunasUsadas = cabecalho
+        .map((h, i) => i)
+        .filter(i => cabecalho[i] || rows.some(r => valorCelula(r.c?.[i]) !== ""));
+
+    const linhas = rows
+        .filter(r => r.c && r.c.some(c => c && c.v != null && c.v !== ""))
+        .map(r => colunasUsadas.map(i => {
+            const v = i === idxCPF
+                ? formatarCPF(r.c[i]?.v)
+                : valorCelula(r.c[i]);
+            return String(v);
+        }));
+
+    dadosPassageiros = {
+        cabecalho: colunasUsadas.map(i => cabecalho[i] || `Coluna ${i + 1}`),
+        linhas
+    };
+
+    const card = document.querySelector("#passageiros .card");
+
+    const termoAtual =
+        document.getElementById("buscaPassageiro")?.value ?? "";
+
+    card.innerHTML = `
+        <input id="buscaPassageiro" class="busca" type="search"
+            placeholder="Buscar por nome, CPF ou nº da compra..."
+            oninput="renderizarPassageiros()">
+        <div class="total" id="totalPassageiros"></div>
+        <div class="tabela-wrap" id="tabelaPassageiros"></div>
+    `;
+
+    document.getElementById("buscaPassageiro").value = termoAtual;
+
+    renderizarPassageiros();
+}
+
+function renderizarPassageiros() {
+
+    const termo = (document.getElementById("buscaPassageiro")?.value ?? "")
+        .toLowerCase().trim();
+
+    const termoNum = termo.replace(/\D/g, "");
+
+    const { cabecalho, linhas } = dadosPassageiros;
+
+    const filtradas = linhas.filter(l => {
+        if (!termo) return true;
+        return l.some(v => {
+            const t = v.toLowerCase();
+            return t.includes(termo) ||
+                (termoNum && t.replace(/\D/g, "").includes(termoNum));
+        });
+    });
+
+    let html = `<table><tr><th>#</th>${cabecalho.map(h => `<th>${escapar(h)}</th>`).join("")}</tr>`;
+
+    filtradas.forEach((l, i) => {
+        html += `<tr><td>${i + 1}</td>${l.map(v => `<td>${escapar(v)}</td>`).join("")}</tr>`;
+    });
+
+    html += "</table>";
+
+    document.getElementById("tabelaPassageiros").innerHTML = html;
+
+    document.getElementById("totalPassageiros").textContent =
+        termo
+            ? `${filtradas.length} de ${linhas.length} passageiros`
+            : `Total: ${linhas.length} passageiros`;
 }
 
 async function carregarRefeicao(gid, destino) {
@@ -476,9 +800,13 @@ async function atualizar() {
                 "jantar"
             ),
 
-            carregarIngredientes()
+            carregarIngredientes(),
+
+            carregarPassageiros()
 
         ]);
+
+        document.getElementById("erro").innerHTML = "";
 
         document.getElementById(
             "ultimaAtualizacao"
