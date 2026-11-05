@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 
 <head>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -16,7 +17,7 @@
 }
 
 body{
-    font-family: Arial, Helvetica, sans-serif;
+    font-family:Arial,Helvetica,sans-serif;
     background:#f4f6f8;
     color:#333;
 }
@@ -24,30 +25,49 @@ body{
 header{
     background:#0f766e;
     color:white;
-    padding:25px;
-}
-
-header h1{
-    margin-bottom:8px;
+    padding:24px;
 }
 
 .container{
-    max-width:1200px;
+    max-width:1300px;
     margin:auto;
     padding:20px;
 }
 
-.card{
-    background:white;
-    border-radius:10px;
-    padding:20px;
-    margin-bottom:20px;
-    box-shadow:0 2px 6px rgba(0,0,0,.08);
+.tabs{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-bottom:25px;
 }
 
-h2{
-    color:#0f766e;
-    margin-bottom:15px;
+.tab{
+    border:none;
+    cursor:pointer;
+    padding:12px 18px;
+    border-radius:10px;
+    background:#e5e7eb;
+    font-weight:bold;
+}
+
+.tab.active{
+    background:#0f766e;
+    color:white;
+}
+
+.aba{
+    display:none;
+}
+
+.aba.ativa{
+    display:block;
+}
+
+.card{
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
 }
 
 details{
@@ -55,20 +75,30 @@ details{
     border:1px solid #e5e7eb;
     border-radius:10px;
     margin-bottom:12px;
-    padding:15px;
+    overflow:hidden;
 }
 
 summary{
-    font-size:16px;
-    font-weight:bold;
+    padding:15px;
     cursor:pointer;
+    font-weight:bold;
+    background:#f8fafc;
 }
 
 .bloco{
-    margin-top:12px;
-    padding:12px;
-    background:#f8fafc;
+    padding:15px;
+    margin:10px;
     border-radius:8px;
+    background:#f8fafc;
+}
+
+.categoria{
+    margin-bottom:25px;
+}
+
+.categoria h3{
+    margin-bottom:12px;
+    color:#0f766e;
 }
 
 table{
@@ -82,19 +112,17 @@ th{
 }
 
 th,td{
-    border:1px solid #ddd;
     padding:10px;
-    text-align:left;
+    border:1px solid #ddd;
 }
 
 tr:nth-child(even){
-    background:#f9fafb;
+    background:#fafafa;
 }
 
 .loading{
     text-align:center;
     padding:20px;
-    color:#666;
 }
 
 .erro{
@@ -102,13 +130,6 @@ tr:nth-child(even){
     color:#991b1b;
     padding:15px;
     border-radius:8px;
-    margin-bottom:20px;
-}
-
-.status{
-    font-size:12px;
-    color:#64748b;
-    margin-top:10px;
 }
 
 </style>
@@ -119,175 +140,167 @@ tr:nth-child(even){
 
 <header>
 
-    <h1>Planejamento da Viagem - Ipojuca/PE</h1>
+<h1>Planejamento da Viagem - Ipojuca/PE</h1>
 
-    <div id="ultimaAtualizacao">
-        Carregando...
-    </div>
+<div id="ultimaAtualizacao">
+Carregando...
+</div>
 
 </header>
 
 <div class="container">
 
-    <div id="erro"></div>
+<div id="erro"></div>
 
-    <div class="card">
+<div class="tabs">
 
-        <h2>Dados da Viagem</h2>
+<button class="tab active"
+onclick="abrirAba('viagem',this)">
+📍 Viagem
+</button>
 
-        <div id="viagem">
+<button class="tab"
+onclick="abrirAba('cafe',this)">
+☕ Café da Manhã
+</button>
 
-            <div class="loading">
-                Carregando...
-            </div>
+<button class="tab"
+onclick="abrirAba('almoco',this)">
+🍽 Almoço
+</button>
 
-        </div>
+<button class="tab"
+onclick="abrirAba('lanche',this)">
+🥪 Lanche
+</button>
 
-    </div>
+<button class="tab"
+onclick="abrirAba('jantar',this)">
+🌙 Jantar
+</button>
 
-    <div class="card">
+<button class="tab"
+onclick="abrirAba('ingredientes',this)">
+🛒 Ingredientes
+</button>
 
-        <h2>Cafés da Manhã</h2>
+</div>
 
-        <div id="cardapio">
+<div id="viagem" class="aba ativa">
+<div class="card"></div>
+</div>
 
-            <div class="loading">
-                Carregando...
-            </div>
+<div id="cafe" class="aba">
+<div class="card"></div>
+</div>
 
-        </div>
+<div id="almoco" class="aba">
+<div class="card"></div>
+</div>
 
-    </div>
+<div id="lanche" class="aba">
+<div class="card"></div>
+</div>
 
-    <div class="card">
+<div id="jantar" class="aba">
+<div class="card"></div>
+</div>
 
-        <h2>Ingredientes</h2>
-
-        <table>
-
-            <thead>
-
-                <tr>
-                    <th>Ingrediente</th>
-                    <th>Quantidade</th>
-                    <th>Unidade</th>
-                </tr>
-
-            </thead>
-
-            <tbody id="ingredientes">
-
-                <tr>
-
-                    <td colspan="3">
-                        Carregando...
-                    </td>
-
-                </tr>
-
-            </tbody>
-
-        </table>
-
-    </div>
+<div id="ingredientes" class="aba">
+<div class="card"></div>
+</div>
 
 </div>
 
 <script>
 
-const SHEET_ID =
-"1nIWKndBOY-c6DL4pil-ZI1sXgCGO1eOZddWOnWanQjI";
+const SHEET_ID = "1nIWKndBOY-c6DL4pil-ZI1sXgCGO1eOZddWOnWanQjI";
 
 const GIDS = {
-
     viagem: 1196950908,
-    cardapio: 388995602,
+    cafe: 388995602,
+    almoco: 674787523,
+    lanche: 1639570066,
+    jantar: 1151968492,
     ingredientes: 896032985
-
 };
 
-function montarURL(gid){
+function abrirAba(id, btn) {
+
+    document.querySelectorAll(".aba")
+        .forEach(el => el.classList.remove("ativa"));
+
+    document.querySelectorAll(".tab")
+        .forEach(el => el.classList.remove("active"));
+
+    document.getElementById(id)
+        .classList.add("ativa");
+
+    btn.classList.add("active");
+}
+
+function montarURL(gid) {
 
     return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${gid}&tqx=out:json`;
 
 }
 
-async function carregarAba(gid){
+async function carregarAba(gid) {
 
-    const response =
-        await fetch(
-            montarURL(gid)
-        );
+    const response = await fetch(
+        montarURL(gid)
+    );
 
-    const texto =
-        await response.text();
+    const text = await response.text();
 
-    const inicio =
-        texto.indexOf('{');
+    const inicio = text.indexOf("{");
+    const fim = text.lastIndexOf("}");
 
-    const fim =
-        texto.lastIndexOf('}');
-
-    const json =
-        JSON.parse(
-            texto.substring(
-                inicio,
-                fim + 1
-            )
-        );
-
-    return json.table.rows;
+    return JSON.parse(
+        text.substring(inicio, fim + 1)
+    );
 
 }
 
-async function carregarViagem(){
+async function carregarViagem() {
 
-    const rows =
-        await carregarAba(
-            GIDS.viagem
-        );
+    const json = await carregarAba(
+        GIDS.viagem
+    );
 
     let html =
-        '<ul style="line-height:2;">';
+        '<div class="card"><ul style="line-height:2">';
 
-    rows.forEach(row=>{
+    json.table.rows.forEach(row => {
 
-        if(!row.c || !row.c[0])
+        if (!row.c || !row.c[0])
             return;
 
         html += `
             <li>
-                <strong>
-                    ${row.c[0]?.v ?? ""}
-                </strong>:
-                ${row.c[1]?.v ?? ""}
+                <strong>${row.c[0]?.v ?? ""}</strong>
+                : ${row.c[1]?.v ?? ""}
             </li>
         `;
 
     });
 
-    html += "</ul>";
+    html += "</ul></div>";
 
-    document
-        .getElementById(
-            "viagem"
-        )
+    document.getElementById("viagem")
         .innerHTML = html;
-
 }
 
-async function carregarCardapio(){
+async function carregarRefeicao(gid, destino) {
 
-    const rows =
-        await carregarAba(
-            GIDS.cardapio
-        );
+    const json =
+        await carregarAba(gid);
 
-    let html = "";
+    let html = '<div class="card">';
 
-    rows.forEach((row,index)=>{
+    json.table.rows.forEach((row, index) => {
 
-        if(index === 0)
+        if (index === 0)
             return;
 
         const data =
@@ -296,10 +309,10 @@ async function carregarCardapio(){
         const dia =
             row.c[1]?.v ?? "";
 
-        const base =
+        const cardapio =
             row.c[2]?.v ?? "";
 
-        const acomp =
+        const ingredientes =
             row.c[3]?.v ?? "";
 
         html += `
@@ -312,131 +325,185 @@ async function carregarCardapio(){
 
             <div class="bloco">
 
-                <strong>
-                    Base fixa diária
-                </strong>
+                <strong>Cardápio</strong>
 
                 <p>
-                    ${base}
+                    ${cardapio}
                 </p>
 
             </div>
 
             <div class="bloco">
 
-                <strong>
-                    Acompanhamentos
-                </strong>
+                <strong>Ingredientes</strong>
 
                 <p>
-                    ${acomp}
+                    ${ingredientes}
                 </p>
 
             </div>
 
         </details>
+
         `;
+
     });
 
-    document
-        .getElementById(
-            "cardapio"
-        )
-        .innerHTML = html;
+    html += "</div>";
 
+    document.getElementById(destino)
+        .innerHTML = html;
 }
 
-async function carregarIngredientes(){
+async function carregarIngredientes() {
 
-    const rows =
+    const json =
         await carregarAba(
             GIDS.ingredientes
         );
 
-    let html = "";
+    const categorias = {};
 
-    rows.forEach((row,index)=>{
+    json.table.rows.forEach((row, index) => {
 
-        if(index === 0)
+        if (index === 0)
             return;
 
-        html += `
+        const categoria =
+            row.c[0]?.v ?? "";
 
-        <tr>
+        if (!categorias[categoria])
+            categorias[categoria] = [];
 
-            <td>
-                ${row.c[0]?.v ?? ""}
-            </td>
+        categorias[categoria].push({
 
-            <td>
-                ${row.c[1]?.f ??
-                  row.c[1]?.v ??
-                  ""}
-            </td>
+            ingrediente:
+                row.c[1]?.v ?? "",
 
-            <td>
-                ${row.c[2]?.v ?? ""}
-            </td>
+            quantidade:
+                row.c[2]?.v ?? "",
 
-        </tr>
+            unidade:
+                row.c[3]?.v ?? ""
 
-        `;
+        });
 
     });
 
-    document
-        .getElementById(
-            "ingredientes"
-        )
-        .innerHTML = html;
+    let html = '<div class="card">';
 
+    Object.keys(categorias)
+        .forEach(categoria => {
+
+            html += `
+
+            <div class="categoria">
+
+                <h3>${categoria}</h3>
+
+                <table>
+
+                    <tr>
+
+                        <th>Ingrediente</th>
+                        <th>Quantidade</th>
+                        <th>Unidade</th>
+
+                    </tr>
+
+            `;
+
+            categorias[categoria]
+                .forEach(item => {
+
+                    html += `
+
+                    <tr>
+
+                        <td>${item.ingrediente}</td>
+
+                        <td>${item.quantidade}</td>
+
+                        <td>${item.unidade}</td>
+
+                    </tr>
+
+                    `;
+
+                });
+
+            html += `
+
+                </table>
+
+            </div>
+
+            `;
+
+        });
+
+    html += "</div>";
+
+    document.getElementById("ingredientes")
+        .innerHTML = html;
 }
 
-async function atualizar(){
+async function atualizar() {
 
-    try{
-
-        document
-            .getElementById(
-                "erro"
-            )
-            .innerHTML = "";
+    try {
 
         await Promise.all([
 
             carregarViagem(),
-            carregarCardapio(),
+
+            carregarRefeicao(
+                GIDS.cafe,
+                "cafe"
+            ),
+
+            carregarRefeicao(
+                GIDS.almoco,
+                "almoco"
+            ),
+
+            carregarRefeicao(
+                GIDS.lanche,
+                "lanche"
+            ),
+
+            carregarRefeicao(
+                GIDS.jantar,
+                "jantar"
+            ),
+
             carregarIngredientes()
 
         ]);
 
-        document
-            .getElementById(
-                "ultimaAtualizacao"
-            )
-            .innerHTML =
-                "Última atualização: " +
-                new Date()
-                .toLocaleString(
-                    "pt-BR"
-                );
+        document.getElementById(
+            "ultimaAtualizacao"
+        ).innerHTML =
+            "Última atualização: " +
+            new Date().toLocaleString(
+                "pt-BR"
+            );
 
     }
-    catch(error){
+    catch (erro) {
 
-        console.error(error);
+        console.error(erro);
 
-        document
-            .getElementById(
-                "erro"
-            )
-            .innerHTML = `
-            <div class="erro">
+        document.getElementById(
+            "erro"
+        ).innerHTML = `
 
-                Não foi possível
-                carregar a planilha.
+        <div class="erro">
 
-            </div>
+            Erro ao carregar
+            os dados da planilha.
+
+        </div>
+
         `;
     }
 
