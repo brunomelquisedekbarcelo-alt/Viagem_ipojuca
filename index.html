@@ -462,36 +462,103 @@ async function carregarViagem() {
         GIDS.viagem
     );
 
-    let html =
-        '<div class="card"><ul style="line-height:2">';
-
     const pontos = [];
+    const infoGeral = [];
+    const infoVoos = [];
+    const tabelas = [];      // blocos de linhas com 3+ colunas preenchidas
+    let tabelaAtual = null;
+
+    const REGEX_VOO = /\bida\b|\bvolta\b|hor[áa]rio d[eo] v|voo|v[ôo]o|a[ée]reo|embarque|partida|chegada|decolagem|pouso|aeroporto|check-?in|companhia a|\bcia\b|localizador|port[ãa]o de|latam/i;
 
     json.table.rows.forEach(row => {
 
-        if (!row.c || !row.c[0])
+        if (!row.c) {
+            tabelaAtual = null;
             return;
+        }
+
+        // Valores já formatados (datas e horas como aparecem na planilha)
+        const celulas = row.c.map(c => String(valorCelula(c)).trim());
+        while (celulas.length && !celulas[celulas.length - 1])
+            celulas.pop();
+
+        const preenchidas = celulas.filter(v => v !== "");
+
+        if (!preenchidas.length) {
+            tabelaAtual = null;
+            return;
+        }
 
         const coord = extrairCoordenada(row);
 
         if (coord) {
             pontos.push({
-                nome: String(row.c[0]?.v ?? `Ponto ${pontos.length + 1}`),
+                nome: celulas[0] || `Ponto ${pontos.length + 1}`,
                 ...coord
             });
+            tabelaAtual = null;
             return;
         }
 
-        html += `
-            <li>
-                <strong>${row.c[0]?.v ?? ""}</strong>
-                : ${row.c[1]?.v ?? ""}
-            </li>
-        `;
+        if (preenchidas.length >= 3) {
+            if (!tabelaAtual) {
+                tabelaAtual = [];
+                tabelas.push(tabelaAtual);
+            }
+            tabelaAtual.push(celulas);
+            return;
+        }
+
+        tabelaAtual = null;
+
+        const item = {
+            rotulo: celulas[0],
+            valor: celulas.slice(1).filter(v => v).join(" · ")
+        };
+
+        if (REGEX_VOO.test(item.rotulo + " " + item.valor))
+            infoVoos.push(item);
+        else
+            infoGeral.push(item);
 
     });
 
-    html += "</ul>";
+    const montarLista = itens => `
+        <ul style="line-height:2;list-style:none">
+            ${itens.map(i => `
+                <li>
+                    <strong>${escapar(i.rotulo)}</strong>${i.valor ? ": " + escapar(i.valor) : ""}
+                </li>`).join("")}
+        </ul>`;
+
+    const montarTabela = linhas => {
+        const n = Math.max(...linhas.map(l => l.length));
+        const pad = l => Array.from({ length: n }, (_, i) => l[i] ?? "");
+        const [cab, ...corpo] = linhas.length > 1 ? linhas : [[], ...linhas];
+        return `
+            <div class="tabela-wrap" style="margin-top:10px">
+            <table>
+                ${cab.length ? `<tr>${pad(cab).map(h => `<th>${escapar(h)}</th>`).join("")}</tr>` : ""}
+                ${corpo.map(l => `<tr>${pad(l).map(v => `<td>${escapar(v)}</td>`).join("")}</tr>`).join("")}
+            </table>
+            </div>`;
+    };
+
+    let html = '<div class="card">';
+
+    if (infoGeral.length)
+        html += montarLista(infoGeral);
+
+    const tabelasVoo = tabelas.filter(t => REGEX_VOO.test(t.flat().join(" ")));
+    const outrasTabelas = tabelas.filter(t => !tabelasVoo.includes(t));
+
+    if (infoVoos.length || tabelasVoo.length) {
+        html += `<h3 style="margin-top:20px;color:#0f766e">✈️ Voos</h3>`;
+        if (infoVoos.length) html += montarLista(infoVoos);
+        tabelasVoo.forEach(t => html += montarTabela(t));
+    }
+
+    outrasTabelas.forEach(t => html += montarTabela(t));
 
     if (pontos.length) {
         html += `
