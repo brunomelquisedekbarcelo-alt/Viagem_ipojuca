@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Planejamento da Viagem - Ipojuca</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family: Arial, Helvetica, sans-serif;
+    background:#f4f6f8;
+    color:#333;
+}
+
+header{
+    background:#0f766e;
+    color:white;
+    padding:25px;
+}
+
+header h1{
+    margin-bottom:8px;
+}
+
+.container{
+    max-width:1200px;
+    margin:auto;
+    padding:20px;
+}
+
+.card{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-bottom:20px;
+    box-shadow:0 2px 6px rgba(0,0,0,.08);
+}
+
+h2{
+    color:#0f766e;
+    margin-bottom:15px;
+}
+
+details{
+    background:white;
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    margin-bottom:12px;
+    padding:15px;
+}
+
+summary{
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+.bloco{
+    margin-top:12px;
+    padding:12px;
+    background:#f8fafc;
+    border-radius:8px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th{
+    background:#0f766e;
+    color:white;
+}
+
+th,td{
+    border:1px solid #ddd;
+    padding:10px;
+    text-align:left;
+}
+
+tr:nth-child(even){
+    background:#f9fafb;
+}
+
+.loading{
+    text-align:center;
+    padding:20px;
+    color:#666;
+}
+
+.erro{
+    background:#fee2e2;
+    color:#991b1b;
+    padding:15px;
+    border-radius:8px;
+    margin-bottom:20px;
+}
+
+.status{
+    font-size:12px;
+    color:#64748b;
+    margin-top:10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+
+    <h1>Planejamento da Viagem - Ipojuca/PE</h1>
+
+    <div id="ultimaAtualizacao">
+        Carregando...
+    </div>
+
+</header>
+
+<div class="container">
+
+    <div id="erro"></div>
+
+    <div class="card">
+
+        <h2>Dados da Viagem</h2>
+
+        <div id="viagem">
+
+            <div class="loading">
+                Carregando...
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <h2>Cafés da Manhã</h2>
+
+        <div id="cardapio">
+
+            <div class="loading">
+                Carregando...
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <h2>Ingredientes</h2>
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>Ingrediente</th>
+                    <th>Quantidade</th>
+                    <th>Unidade</th>
+                </tr>
+
+            </thead>
+
+            <tbody id="ingredientes">
+
+                <tr>
+
+                    <td colspan="3">
+                        Carregando...
+                    </td>
+
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+<script>
+
+const SHEET_ID =
+"1nIWKndBOY-c6DL4pil-ZI1sXgCGO1eOZddWOnWanQjI";
+
+const GIDS = {
+
+    viagem: 1196950908,
+    cardapio: 388995602,
+    ingredientes: 896032985
+
+};
+
+function montarURL(gid){
+
+    return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${gid}&tqx=out:json`;
+
+}
+
+async function carregarAba(gid){
+
+    const response =
+        await fetch(
+            montarURL(gid)
+        );
+
+    const texto =
+        await response.text();
+
+    const inicio =
+        texto.indexOf('{');
+
+    const fim =
+        texto.lastIndexOf('}');
+
+    const json =
+        JSON.parse(
+            texto.substring(
+                inicio,
+                fim + 1
+            )
+        );
+
+    return json.table.rows;
+
+}
+
+async function carregarViagem(){
+
+    const rows =
+        await carregarAba(
+            GIDS.viagem
+        );
+
+    let html =
+        '<ul style="line-height:2;">';
+
+    rows.forEach(row=>{
+
+        if(!row.c || !row.c[0])
+            return;
+
+        html += `
+            <li>
+                <strong>
+                    ${row.c[0]?.v ?? ""}
+                </strong>:
+                ${row.c[1]?.v ?? ""}
+            </li>
+        `;
+
+    });
+
+    html += "</ul>";
+
+    document
+        .getElementById(
+            "viagem"
+        )
+        .innerHTML = html;
+
+}
+
+async function carregarCardapio(){
+
+    const rows =
+        await carregarAba(
+            GIDS.cardapio
+        );
+
+    let html = "";
+
+    rows.forEach((row,index)=>{
+
+        if(index === 0)
+            return;
+
+        const data =
+            row.c[0]?.v ?? "";
+
+        const dia =
+            row.c[1]?.v ?? "";
+
+        const base =
+            row.c[2]?.v ?? "";
+
+        const acomp =
+            row.c[3]?.v ?? "";
+
+        html += `
+
+        <details>
+
+            <summary>
+                ${data} - ${dia}
+            </summary>
+
+            <div class="bloco">
+
+                <strong>
+                    Base fixa diária
+                </strong>
+
+                <p>
+                    ${base}
+                </p>
+
+            </div>
+
+            <div class="bloco">
+
+                <strong>
+                    Acompanhamentos
+                </strong>
+
+                <p>
+                    ${acomp}
+                </p>
+
+            </div>
+
+        </details>
+        `;
+    });
+
+    document
+        .getElementById(
+            "cardapio"
+        )
+        .innerHTML = html;
+
+}
+
+async function carregarIngredientes(){
+
+    const rows =
+        await carregarAba(
+            GIDS.ingredientes
+        );
+
+    let html = "";
+
+    rows.forEach((row,index)=>{
+
+        if(index === 0)
+            return;
+
+        html += `
+
+        <tr>
+
+            <td>
+                ${row.c[0]?.v ?? ""}
+            </td>
+
+            <td>
+                ${row.c[1]?.f ??
+                  row.c[1]?.v ??
+                  ""}
+            </td>
+
+            <td>
+                ${row.c[2]?.v ?? ""}
+            </td>
+
+        </tr>
+
+        `;
+
+    });
+
+    document
+        .getElementById(
+            "ingredientes"
+        )
+        .innerHTML = html;
+
+}
+
+async function atualizar(){
+
+    try{
+
+        document
+            .getElementById(
+                "erro"
+            )
+            .innerHTML = "";
+
+        await Promise.all([
+
+            carregarViagem(),
+            carregarCardapio(),
+            carregarIngredientes()
+
+        ]);
+
+        document
+            .getElementById(
+                "ultimaAtualizacao"
+            )
+            .innerHTML =
+                "Última atualização: " +
+                new Date()
+                .toLocaleString(
+                    "pt-BR"
+                );
+
+    }
+    catch(error){
+
+        console.error(error);
+
+        document
+            .getElementById(
+                "erro"
+            )
+            .innerHTML = `
+            <div class="erro">
+
+                Não foi possível
+                carregar a planilha.
+
+            </div>
+        `;
+    }
+
+}
+
+atualizar();
+
+setInterval(
+    atualizar,
+    300000
+);
+
+</script>
+
+</body>
+</html>
