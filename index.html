@@ -74,6 +74,127 @@
     overflow-x:auto;
 }
 
+/* ---------- Blocos de destaque (datas/voos e resumo financeiro) ---------- */
+
+.tiles{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:12px;
+    margin:12px 0 4px;
+}
+
+.tile{
+    background:#f0fdfa;
+    border:1px solid #ccfbf1;
+    border-radius:10px;
+    padding:12px 14px;
+}
+
+.tile-rotulo{
+    font-size:13px;
+    color:#555;
+    margin-bottom:4px;
+}
+
+.tile-valor{
+    font-size:20px;
+    font-weight:bold;
+    color:#134e4a;
+    font-variant-numeric:tabular-nums;
+}
+
+/* ---------- Gráfico de barras do financeiro ---------- */
+
+.fin-secao{
+    margin-top:26px;
+}
+
+.fin-secao h3{
+    color:#0f766e;
+    margin-bottom:4px;
+}
+
+.fin-legenda{
+    font-size:13px;
+    color:#666;
+    margin-bottom:12px;
+}
+
+.barra-linha{
+    display:grid;
+    grid-template-columns:minmax(120px,240px) 1fr auto;
+    align-items:center;
+    gap:10px;
+    padding:5px 4px;
+    border-radius:6px;
+}
+
+.barra-linha:hover{
+    background:#f3f4f6;
+}
+
+.barra-nome{
+    font-size:14px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.barra-trilho{
+    height:14px;
+    background:#f1f5f9;
+    border-radius:4px;
+    overflow:hidden;
+}
+
+.barra{
+    height:100%;
+    border-radius:0 4px 4px 0;
+    min-width:3px;
+}
+
+.barra.deve{ background:#c2410c; }
+.barra.recebe{ background:#0f766e; }
+
+.barra-valor{
+    font-size:14px;
+    font-weight:bold;
+    font-variant-numeric:tabular-nums;
+    min-width:96px;
+    text-align:right;
+}
+
+.chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+}
+
+.chip{
+    background:#ecfdf5;
+    border:1px solid #a7f3d0;
+    color:#065f46;
+    padding:5px 10px;
+    border-radius:999px;
+    font-size:13px;
+}
+
+td.num{
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+}
+
+@media (max-width:560px){
+    .barra-linha{
+        grid-template-columns:1fr auto;
+    }
+    .barra-trilho{
+        grid-column:1 / -1;
+        order:3;
+    }
+}
+
 
 *{
     margin:0;
@@ -254,6 +375,11 @@ onclick="abrirAba('passageiros',this)">
 🧍 Passageiros
 </button>
 
+<button class="tab"
+onclick="abrirAba('financeiro',this)">
+💰 Financeiro
+</button>
+
 </div>
 
 <div id="viagem" class="aba ativa">
@@ -281,6 +407,10 @@ onclick="abrirAba('passageiros',this)">
 </div>
 
 <div id="passageiros" class="aba">
+<div class="card"></div>
+</div>
+
+<div id="financeiro" class="aba">
 <div class="card"></div>
 </div>
 
@@ -433,9 +563,16 @@ function desenharMapa(pontos) {
     setTimeout(() => mapa.invalidateSize(), 50);
 }
 
-function montarURL(gid) {
+// Aceita o gid (número) ou o nome da aba (texto).
+// headers=1 força a 1ª linha como cabeçalho; sem isso o Google às vezes
+// "engole" várias linhas no cabeçalho (era o que escondia os horários de voo).
+function montarURL(aba) {
 
-    return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${gid}&tqx=out:json`;
+    const ref = typeof aba === "number"
+        ? `gid=${aba}`
+        : `sheet=${encodeURIComponent(aba)}`;
+
+    return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?${ref}&headers=1&tqx=out:json&_=${Date.now()}`;
 
 }
 
@@ -468,7 +605,7 @@ async function carregarViagem() {
     const tabelas = [];      // blocos de linhas com 3+ colunas preenchidas
     let tabelaAtual = null;
 
-    const REGEX_VOO = /\bida\b|\bvolta\b|hor[áa]rio d[eo] v|voo|v[ôo]o|a[ée]reo|embarque|partida|chegada|decolagem|pouso|aeroporto|check-?in|companhia a|\bcia\b|localizador|port[ãa]o de|latam/i;
+    const REGEX_VOO = /in[íi]cio|^fim$|\bfim\b|\bida\b|\bvolta\b|hor[áa]rio d[eo] v|voo|v[ôo]o|a[ée]reo|embarque|partida|chegada|decolagem|pouso|aeroporto|check-?in|companhia a|\bcia\b|localizador|port[ãa]o de|latam/i;
 
     json.table.rows.forEach(row => {
 
@@ -553,8 +690,15 @@ async function carregarViagem() {
     const outrasTabelas = tabelas.filter(t => !tabelasVoo.includes(t));
 
     if (infoVoos.length || tabelasVoo.length) {
-        html += `<h3 style="margin-top:20px;color:#0f766e">✈️ Voos</h3>`;
-        if (infoVoos.length) html += montarLista(infoVoos);
+        html += `<h3 style="margin-top:20px;color:#0f766e">✈️ Datas e voos</h3>`;
+        if (infoVoos.length) html += `
+            <div class="tiles">
+                ${infoVoos.map(i => `
+                    <div class="tile">
+                        <div class="tile-rotulo">${escapar(i.rotulo)}</div>
+                        <div class="tile-valor">${escapar(i.valor || "—")}</div>
+                    </div>`).join("")}
+            </div>`;
         tabelasVoo.forEach(t => html += montarTabela(t));
     }
 
@@ -689,22 +833,22 @@ async function carregarRefeicao(gid, destino) {
 
     let html = '<div class="card">';
 
-    json.table.rows.forEach((row, index) => {
+    json.table.rows.forEach(row => {
 
-        if (index === 0)
+        if (!row.c || !row.c.some(c => c && c.v != null && c.v !== ""))
             return;
 
         const data =
-            row.c[0]?.v ?? "";
+            escapar(valorCelula(row.c[0]));
 
         const dia =
-            row.c[1]?.v ?? "";
+            escapar(valorCelula(row.c[1]));
 
         const cardapio =
-            row.c[2]?.v ?? "";
+            escapar(valorCelula(row.c[2]));
 
         const ingredientes =
-            row.c[3]?.v ?? "";
+            escapar(valorCelula(row.c[3]));
 
         html += `
 
@@ -755,13 +899,15 @@ async function carregarIngredientes() {
 
     const categorias = {};
 
-    json.table.rows.forEach((row, index) => {
+    const temAdquiridos = (json.table.cols[4]?.label || "").trim() !== "";
 
-        if (index === 0)
+    json.table.rows.forEach(row => {
+
+        if (!row.c || !row.c[1] || row.c[1].v == null)
             return;
 
         const categoria =
-            row.c[0]?.v ?? "";
+            String(valorCelula(row.c[0]) || "Outros");
 
         if (!categorias[categoria])
             categorias[categoria] = [];
@@ -769,13 +915,16 @@ async function carregarIngredientes() {
         categorias[categoria].push({
 
             ingrediente:
-                row.c[1]?.v ?? "",
+                escapar(valorCelula(row.c[1])),
 
             quantidade:
-                row.c[2]?.v ?? "",
+                escapar(valorCelula(row.c[2])),
 
             unidade:
-                row.c[3]?.v ?? ""
+                escapar(valorCelula(row.c[3])),
+
+            adquiridos:
+                escapar(valorCelula(row.c[4]))
 
         });
 
@@ -800,6 +949,8 @@ async function carregarIngredientes() {
                         <th>Quantidade</th>
                         <th>Unidade</th>
 
+                        ${temAdquiridos ? "<th>Adquiridos</th>" : ""}
+
                     </tr>
 
             `;
@@ -816,6 +967,8 @@ async function carregarIngredientes() {
                         <td>${item.quantidade}</td>
 
                         <td>${item.unidade}</td>
+
+                        ${temAdquiridos ? `<td>${item.adquiridos}</td>` : ""}
 
                     </tr>
 
@@ -839,11 +992,182 @@ async function carregarIngredientes() {
         .innerHTML = html;
 }
 
+/* ===================== FINANCEIRO ===================== */
+
+const moeda = v => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+function numeroCelula(c) {
+    if (!c || c.v == null || c.v === "") return 0;
+    if (typeof c.v === "number") return c.v;
+    let s = String(c.v).replace(/[R$\s]/g, "");
+    const negativo = /^\(.*\)$/.test(s) || s.startsWith("-");
+    s = s.replace(/[()\-]/g, "").replace(/\./g, "").replace(",", ".");
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : (negativo ? -n : n);
+}
+
+function dataCelula(c) {
+    if (!c || c.v == null) return { texto: "", ordem: 0 };
+    const m = String(c.v).match(/Date\((\d+),(\d+),(\d+)/);
+    if (m) {
+        const d = new Date(+m[1], +m[2], +m[3]);
+        return { texto: d.toLocaleDateString("pt-BR"), ordem: d.getTime() };
+    }
+    return { texto: String(valorCelula(c)), ordem: 0 };
+}
+
+function linhasValidas(json) {
+    return (json.table.rows || [])
+        .filter(r => r.c && r.c[0] && r.c[0].v != null && String(r.c[0].v).trim() !== "");
+}
+
+function graficoBarras(itens, classe) {
+    const max = Math.max(...itens.map(i => i.valor), 0.01);
+    return itens.map(i => `
+        <div class="barra-linha" title="${escapar(i.nome)}: ${moeda(i.valor)}">
+            <div class="barra-nome">${escapar(i.nome)}</div>
+            <div class="barra-trilho">
+                <div class="barra ${classe}" style="width:${(i.valor / max * 100).toFixed(1)}%"></div>
+            </div>
+            <div class="barra-valor">${moeda(i.valor)}</div>
+        </div>`).join("");
+}
+
+async function carregarFinanceiro() {
+
+    const [saldo, extrato, despesas] = await Promise.all([
+        carregarAba("Saldo"),
+        carregarAba("Extrato"),
+        carregarAba("Financeiro")
+    ]);
+
+    const arred = n => Math.round(n * 100) / 100;
+
+    // Aba Saldo: Nome | Saldo Devedor (negativo) | Saldo a Receber
+    const pessoas = linhasValidas(saldo).map(r => ({
+        nome: String(r.c[0].v).trim(),
+        deve: arred(Math.abs(numeroCelula(r.c[1]))),
+        recebe: arred(Math.abs(numeroCelula(r.c[2])))
+    }));
+
+    const devedores = pessoas.filter(p => p.deve > 0)
+        .sort((a, b) => b.deve - a.deve)
+        .map(p => ({ nome: p.nome, valor: p.deve }));
+
+    const recebedores = pessoas.filter(p => p.recebe > 0)
+        .sort((a, b) => b.recebe - a.recebe)
+        .map(p => ({ nome: p.nome, valor: p.recebe }));
+
+    const emDia = pessoas.filter(p => p.deve === 0 && p.recebe === 0);
+
+    // Aba Extrato: Remetente | Destinatário | Valor | Data
+    const pagamentos = linhasValidas(extrato).map(r => ({
+        de: String(valorCelula(r.c[0])),
+        para: String(valorCelula(r.c[1])),
+        valor: numeroCelula(r.c[2]),
+        data: dataCelula(r.c[3])
+    })).sort((a, b) => b.data.ordem - a.data.ordem);
+
+    // Aba Financeiro: Elemento | Valor | Pessoas | Pagador | Valor parcela
+    const itensDespesa = linhasValidas(despesas).map(r => ({
+        elemento: String(valorCelula(r.c[0])),
+        valor: numeroCelula(r.c[1]),
+        pessoas: String(r.c[2]?.v ?? "").split(";").map(s => s.trim()).filter(Boolean),
+        pagador: String(valorCelula(r.c[3])),
+        porPessoa: numeroCelula(r.c[4])
+    }));
+
+    const totalPendente = devedores.reduce((s, i) => s + i.valor, 0);
+    const totalPago = pagamentos.reduce((s, p) => s + p.valor, 0);
+    const totalDespesas = itensDespesa.reduce((s, d) => s + d.valor, 0);
+
+    let html = `
+        <div class="tiles">
+            <div class="tile">
+                <div class="tile-rotulo">Ainda falta pagar</div>
+                <div class="tile-valor" style="color:#9a3412">${moeda(totalPendente)}</div>
+            </div>
+            <div class="tile">
+                <div class="tile-rotulo">Já pago (extrato)</div>
+                <div class="tile-valor">${moeda(totalPago)}</div>
+            </div>
+            <div class="tile">
+                <div class="tile-rotulo">Total de despesas</div>
+                <div class="tile-valor">${moeda(totalDespesas)}</div>
+            </div>
+        </div>`;
+
+    html += `
+        <div class="fin-secao">
+            <h3>🔻 Quanto cada um ainda deve</h3>
+            <div class="fin-legenda">Saldo devedor de cada pessoa, segundo a aba Saldo.</div>
+            ${devedores.length ? graficoBarras(devedores, "deve") : "<p>Ninguém está devendo. 🎉</p>"}
+        </div>
+
+        <div class="fin-secao">
+            <h3>🔺 Quanto cada um vai receber</h3>
+            <div class="fin-legenda">Quem adiantou despesas e ainda tem valores a receber.</div>
+            ${recebedores.length ? graficoBarras(recebedores, "recebe") : "<p>Ninguém tem valores a receber.</p>"}
+        </div>`;
+
+    if (emDia.length) {
+        html += `
+            <div class="fin-secao">
+                <h3>✅ Em dia</h3>
+                <div class="chips">
+                    ${emDia.map(p => `<span class="chip">✓ ${escapar(p.nome)}</span>`).join("")}
+                </div>
+            </div>`;
+    }
+
+    if (itensDespesa.length) {
+        html += `
+            <div class="fin-secao">
+                <h3>🧾 Despesas</h3>
+                <div class="tabela-wrap">
+                <table>
+                    <tr><th>Despesa</th><th>Valor</th><th>Por pessoa</th><th>Dividido entre</th><th>Pago por</th></tr>
+                    ${itensDespesa.map(d => `
+                        <tr>
+                            <td>${escapar(d.elemento)}</td>
+                            <td class="num">${moeda(d.valor)}</td>
+                            <td class="num">${moeda(d.porPessoa)}</td>
+                            <td title="${escapar(d.pessoas.join(", "))}">${d.pessoas.length} pessoa${d.pessoas.length === 1 ? "" : "s"}</td>
+                            <td>${escapar(d.pagador)}</td>
+                        </tr>`).join("")}
+                </table>
+                </div>
+            </div>`;
+    }
+
+    if (pagamentos.length) {
+        html += `
+            <div class="fin-secao">
+                <h3>📄 Pagamentos registrados</h3>
+                <div class="tabela-wrap">
+                <table>
+                    <tr><th>Data</th><th>De</th><th>Para</th><th>Valor</th></tr>
+                    ${pagamentos.map(p => `
+                        <tr>
+                            <td style="white-space:nowrap">${escapar(p.data.texto)}</td>
+                            <td>${escapar(p.de)}</td>
+                            <td>${escapar(p.para)}</td>
+                            <td class="num">${moeda(p.valor)}</td>
+                        </tr>`).join("")}
+                </table>
+                </div>
+            </div>`;
+    }
+
+    document.querySelector("#financeiro .card").innerHTML = html;
+}
+
 async function atualizar() {
 
     try {
 
-        await Promise.all([
+        // allSettled: se uma aba falhar, as outras continuam aparecendo
+        const resultados = await Promise.allSettled([
 
             carregarViagem(),
 
@@ -869,11 +1193,21 @@ async function atualizar() {
 
             carregarIngredientes(),
 
-            carregarPassageiros()
+            carregarPassageiros(),
+
+            carregarFinanceiro()
 
         ]);
 
-        document.getElementById("erro").innerHTML = "";
+        const falhas = resultados.filter(r => r.status === "rejected");
+        falhas.forEach(f => console.error(f.reason));
+
+        if (falhas.length === resultados.length)
+            throw new Error("Nenhuma aba carregou");
+
+        document.getElementById("erro").innerHTML = falhas.length
+            ? `<div class="erro">Algumas abas não puderam ser carregadas (${falhas.length}). Tente atualizar a página.</div>`
+            : "";
 
         document.getElementById(
             "ultimaAtualizacao"
