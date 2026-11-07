@@ -164,6 +164,101 @@
     text-align:right;
 }
 
+.legenda-cores{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+    font-size:13px;
+    margin-bottom:12px;
+}
+
+.legenda-cores i,
+.ponto{
+    display:inline-block;
+    width:11px;
+    height:11px;
+    border-radius:3px;
+    margin-right:6px;
+    vertical-align:-1px;
+}
+
+.devedor{
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    padding:12px 14px;
+    margin-bottom:10px;
+}
+
+.devedor-topo{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:8px;
+}
+
+.devedor-nome{
+    font-weight:bold;
+}
+
+.devedor-total{
+    font-weight:bold;
+    color:#9a3412;
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+}
+
+.barra-trilho.empilhada{
+    display:flex;
+    gap:2px;
+    background:transparent;
+}
+
+.seg{
+    height:100%;
+    min-width:3px;
+}
+
+.seg:last-child{
+    border-radius:0 4px 4px 0;
+}
+
+.destinos{
+    list-style:none;
+    margin-top:8px;
+    font-size:14px;
+    line-height:1.8;
+}
+
+.recebedor{
+    border:1px solid #e5e7eb;
+}
+
+.recebedor summary{
+    background:white;
+    padding:8px 10px;
+    list-style:none;
+}
+
+.recebedor summary::-webkit-details-marker{
+    display:none;
+}
+
+.recebedor-sub{
+    font-size:12px;
+    color:#666;
+    font-weight:normal;
+    padding-left:4px;
+}
+
+table.mini{
+    margin:0 0 10px;
+    font-size:14px;
+}
+
+table.mini td{
+    padding:6px 10px;
+}
+
 .chips{
     display:flex;
     flex-wrap:wrap;
@@ -1043,22 +1138,61 @@ async function carregarFinanceiro() {
 
     const arred = n => Math.round(n * 100) / 100;
 
-    // Aba Saldo: Nome | Saldo Devedor (negativo) | Saldo a Receber
-    const pessoas = linhasValidas(saldo).map(r => ({
-        nome: String(r.c[0].v).trim(),
-        deve: arred(Math.abs(numeroCelula(r.c[1]))),
-        recebe: arred(Math.abs(numeroCelula(r.c[2])))
-    }));
+    // Aba Saldo: Nome | Saldo Devedor | Saldo a Receber | <uma coluna por recebedor>
+    // Cada célula da coluna D em diante = quanto a pessoa da linha deve passar
+    // para a pessoa do cabeçalho da coluna. Dívida consigo mesmo é ignorada.
+    const cols = saldo.table.cols.map(c => (c.label || "").trim());
+    const linhasSaldo = linhasValidas(saldo);
+    const nomes = linhasSaldo.map(r => String(r.c[0].v).trim());
 
-    const devedores = pessoas.filter(p => p.deve > 0)
-        .sort((a, b) => b.deve - a.deve)
-        .map(p => ({ nome: p.nome, valor: p.deve }));
+    const transferencias = [];   // { de, para, valor }
+    linhasSaldo.forEach(r => {
+        const de = String(r.c[0].v).trim();
+        for (let j = 3; j < cols.length; j++) {
+            const para = cols[j];
+            if (!para || para === de) continue;
+            const valor = arred(Math.abs(numeroCelula(r.c[j])));
+            if (valor >= 0.01) transferencias.push({ de, para, valor });
+        }
+    });
 
-    const recebedores = pessoas.filter(p => p.recebe > 0)
-        .sort((a, b) => b.recebe - a.recebe)
-        .map(p => ({ nome: p.nome, valor: p.recebe }));
+    // Se a aba ainda não tiver as colunas por recebedor, usa as colunas B/C
+    const temMatriz = cols.length > 3;
 
-    const emDia = pessoas.filter(p => p.deve === 0 && p.recebe === 0);
+    // Cor fixa por recebedor, na ordem das colunas da planilha
+    const PALETA = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"];
+    const ordemRecebedores = cols.slice(3).filter(n => transferencias.some(t => t.para === n));
+    const corDe = nome => PALETA[ordemRecebedores.indexOf(nome) % PALETA.length] || "#64748b";
+
+    const porDevedor = {};
+    const porRecebedor = {};
+    transferencias.forEach(t => {
+        (porDevedor[t.de] ||= []).push(t);
+        (porRecebedor[t.para] ||= []).push(t);
+    });
+
+    const soma = lista => arred(lista.reduce((s, t) => s + t.valor, 0));
+
+    let devedores, recebedores;
+
+    if (temMatriz) {
+        devedores = Object.entries(porDevedor)
+            .map(([nome, lista]) => ({ nome, valor: soma(lista), lista }))
+            .sort((a, b) => b.valor - a.valor || a.nome.localeCompare(b.nome));
+        recebedores = ordemRecebedores
+            .map(nome => ({ nome, valor: soma(porRecebedor[nome]), lista: porRecebedor[nome] }));
+    } else {
+        const pessoas = linhasSaldo.map(r => ({
+            nome: String(r.c[0].v).trim(),
+            deve: arred(Math.abs(numeroCelula(r.c[1]))),
+            recebe: arred(Math.abs(numeroCelula(r.c[2])))
+        }));
+        devedores = pessoas.filter(p => p.deve > 0).map(p => ({ nome: p.nome, valor: p.deve, lista: [] }));
+        recebedores = pessoas.filter(p => p.recebe > 0).map(p => ({ nome: p.nome, valor: p.recebe, lista: [] }));
+    }
+
+    const emDia = nomes.filter(n =>
+        !devedores.some(d => d.nome === n) && !recebedores.some(r => r.nome === n));
 
     // Aba Extrato: Remetente | Destinatário | Valor | Data
     const pagamentos = linhasValidas(extrato).map(r => ({
@@ -1097,17 +1231,67 @@ async function carregarFinanceiro() {
             </div>
         </div>`;
 
+    const legenda = recebedores.length > 1 ? `
+        <div class="legenda-cores">
+            ${recebedores.map(r => `
+                <span><i style="background:${corDe(r.nome)}"></i>Passar para <strong>${escapar(r.nome)}</strong></span>`).join("")}
+        </div>` : "";
+
+    const maxDeve = Math.max(...devedores.map(d => d.valor), 0.01);
+
+    const blocoDevedores = devedores.map(d => {
+        const segmentos = d.lista.length
+            ? d.lista.map(t => `<div class="seg" style="width:${(t.valor / maxDeve * 100).toFixed(2)}%;background:${corDe(t.para)}" title="${escapar(t.de)} → ${escapar(t.para)}: ${moeda(t.valor)}"></div>`).join("")
+            : `<div class="seg" style="width:${(d.valor / maxDeve * 100).toFixed(2)}%;background:#c2410c"></div>`;
+        const destinos = d.lista.map(t => `
+            <li>
+                <span class="ponto" style="background:${corDe(t.para)}"></span>
+                <strong>${moeda(t.valor)}</strong> → passar para <strong>${escapar(t.para)}</strong>
+            </li>`).join("");
+        return `
+            <div class="devedor">
+                <div class="devedor-topo">
+                    <span class="devedor-nome">${escapar(d.nome)}</span>
+                    <span class="devedor-total">${moeda(d.valor)}</span>
+                </div>
+                <div class="barra-trilho empilhada">${segmentos}</div>
+                ${destinos ? `<ul class="destinos">${destinos}</ul>` : ""}
+            </div>`;
+    }).join("");
+
+    const maxRecebe = Math.max(...recebedores.map(r => r.valor), 0.01);
+
+    const blocoRecebedores = recebedores.map(r => `
+        <details class="recebedor">
+            <summary>
+                <div class="barra-linha" title="${escapar(r.nome)}: ${moeda(r.valor)}">
+                    <div class="barra-nome">${escapar(r.nome)}</div>
+                    <div class="barra-trilho">
+                        <div class="barra" style="width:${(r.valor / maxRecebe * 100).toFixed(1)}%;background:${corDe(r.nome)}"></div>
+                    </div>
+                    <div class="barra-valor">${moeda(r.valor)}</div>
+                </div>
+                ${r.lista.length ? `<div class="recebedor-sub">de ${r.lista.length} pessoa${r.lista.length === 1 ? "" : "s"} · toque para ver quem</div>` : ""}
+            </summary>
+            ${r.lista.length ? `
+                <table class="mini">
+                    ${r.lista.slice().sort((a, b) => b.valor - a.valor || a.de.localeCompare(b.de))
+                        .map(t => `<tr><td>${escapar(t.de)}</td><td class="num">${moeda(t.valor)}</td></tr>`).join("")}
+                </table>` : ""}
+        </details>`).join("");
+
     html += `
         <div class="fin-secao">
-            <h3>🔻 Quanto cada um ainda deve</h3>
-            <div class="fin-legenda">Saldo devedor de cada pessoa, segundo a aba Saldo.</div>
-            ${devedores.length ? graficoBarras(devedores, "deve") : "<p>Ninguém está devendo. 🎉</p>"}
+            <h3>💸 Quem deve passar para quem</h3>
+            <div class="fin-legenda">Quanto cada pessoa ainda deve e para quem deve transferir, segundo a aba Saldo.</div>
+            ${legenda}
+            ${devedores.length ? blocoDevedores : "<p>Ninguém está devendo. 🎉</p>"}
         </div>
 
         <div class="fin-secao">
             <h3>🔺 Quanto cada um vai receber</h3>
-            <div class="fin-legenda">Quem adiantou despesas e ainda tem valores a receber.</div>
-            ${recebedores.length ? graficoBarras(recebedores, "recebe") : "<p>Ninguém tem valores a receber.</p>"}
+            <div class="fin-legenda">Quem adiantou despesas e quanto ainda tem a receber dos outros.</div>
+            ${recebedores.length ? blocoRecebedores : "<p>Ninguém tem valores a receber.</p>"}
         </div>`;
 
     if (emDia.length) {
@@ -1115,7 +1299,7 @@ async function carregarFinanceiro() {
             <div class="fin-secao">
                 <h3>✅ Em dia</h3>
                 <div class="chips">
-                    ${emDia.map(p => `<span class="chip">✓ ${escapar(p.nome)}</span>`).join("")}
+                    ${emDia.map(n => `<span class="chip">✓ ${escapar(n)}</span>`).join("")}
                 </div>
             </div>`;
     }
