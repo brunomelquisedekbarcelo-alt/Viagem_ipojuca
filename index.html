@@ -515,14 +515,20 @@ onclick="abrirAba('financeiro',this)">
 
 const SHEET_ID = "1nIWKndBOY-c6DL4pil-ZI1sXgCGO1eOZddWOnWanQjI";
 
+// As abas são buscadas pelo NOME (não pelo gid). Assim o site continua
+// funcionando mesmo se uma aba for recriada, duplicada ou reordenada.
+// Se renomear uma aba na planilha, altere o nome aqui também.
 const GIDS = {
-    viagem: 1196950908,
-    cafe: 388995602,
-    almoco: 674787523,
-    lanche: 1639570066,
-    jantar: 1151968492,
-    ingredientes: 896032985,
-    passageiros: 392401811
+    viagem: "Viagem",
+    cafe: "CafeManha",
+    almoco: "Almoco",
+    lanche: "Lanche",
+    jantar: "Jantar",
+    ingredientes: "Ingredientes",
+    passageiros: "ListaPassageiros",
+    financeiro: "Financeiro",
+    saldo: "Saldo",
+    extrato: "Extrato"
 };
 
 let mapa = null;
@@ -545,6 +551,13 @@ function abrirAba(id, btn) {
     // O Leaflet precisa recalcular o tamanho quando a aba fica visível
     if (id === "viagem" && mapa)
         setTimeout(() => mapa.invalidateSize(), 50);
+}
+
+// Acha a coluna pelo título (ignora acentos/maiúsculas); se não achar, usa a posição padrão
+function indiceColuna(json, regex, padrao) {
+    const tira = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+    const i = json.table.cols.findIndex(c => regex.test(tira(c.label)));
+    return i >= 0 ? i : padrao;
 }
 
 function valorCelula(c) {
@@ -682,9 +695,19 @@ async function carregarAba(gid) {
     const inicio = text.indexOf("{");
     const fim = text.lastIndexOf("}");
 
-    return JSON.parse(
-        text.substring(inicio, fim + 1)
-    );
+    let json;
+    try {
+        json = JSON.parse(text.substring(inicio, fim + 1));
+    } catch (e) {
+        throw new Error(`Aba "${gid}": resposta inválida (a planilha está compartilhada como "qualquer pessoa com o link"?)`);
+    }
+
+    if (json.status === "error" || !json.table) {
+        const motivo = json.errors?.map(e => e.detailed_message || e.message).join("; ") || "aba não encontrada";
+        throw new Error(`Aba "${gid}": ${motivo}`);
+    }
+
+    return json;
 
 }
 
@@ -928,22 +951,27 @@ async function carregarRefeicao(gid, destino) {
 
     let html = '<div class="card">';
 
+    const iData = indiceColuna(json, /^data$/i, 0);
+    const iDia = indiceColuna(json, /^dia/i, 1);
+    const iCard = indiceColuna(json, /cardapio|menu/i, 2);
+    const iIngr = indiceColuna(json, /ingrediente/i, 3);
+
     json.table.rows.forEach(row => {
 
         if (!row.c || !row.c.some(c => c && c.v != null && c.v !== ""))
             return;
 
         const data =
-            escapar(valorCelula(row.c[0]));
+            escapar(valorCelula(row.c[iData]));
 
         const dia =
-            escapar(valorCelula(row.c[1]));
+            escapar(valorCelula(row.c[iDia]));
 
         const cardapio =
-            escapar(valorCelula(row.c[2]));
+            escapar(valorCelula(row.c[iCard]));
 
         const ingredientes =
-            escapar(valorCelula(row.c[3]));
+            escapar(valorCelula(row.c[iIngr]));
 
         html += `
 
@@ -994,15 +1022,20 @@ async function carregarIngredientes() {
 
     const categorias = {};
 
-    const temAdquiridos = (json.table.cols[4]?.label || "").trim() !== "";
+    const iCat = indiceColuna(json, /categoria/i, 0);
+    const iIng = indiceColuna(json, /^ingrediente/i, 1);
+    const iQtd = indiceColuna(json, /quantidade|qtd/i, 2);
+    const iUn = indiceColuna(json, /unidade|^un/i, 3);
+    const iAdq = indiceColuna(json, /adquirid|comprad/i, -1);
+    const temAdquiridos = iAdq >= 0;
 
     json.table.rows.forEach(row => {
 
-        if (!row.c || !row.c[1] || row.c[1].v == null)
+        if (!row.c || !row.c[iIng] || row.c[iIng].v == null)
             return;
 
         const categoria =
-            String(valorCelula(row.c[0]) || "Outros");
+            String(valorCelula(row.c[iCat]) || "Outros");
 
         if (!categorias[categoria])
             categorias[categoria] = [];
@@ -1010,16 +1043,16 @@ async function carregarIngredientes() {
         categorias[categoria].push({
 
             ingrediente:
-                escapar(valorCelula(row.c[1])),
+                escapar(valorCelula(row.c[iIng])),
 
             quantidade:
-                escapar(valorCelula(row.c[2])),
+                escapar(valorCelula(row.c[iQtd])),
 
             unidade:
-                escapar(valorCelula(row.c[3])),
+                escapar(valorCelula(row.c[iUn])),
 
             adquiridos:
-                escapar(valorCelula(row.c[4]))
+                temAdquiridos ? escapar(valorCelula(row.c[iAdq])) : ""
 
         });
 
@@ -1131,9 +1164,9 @@ function graficoBarras(itens, classe) {
 async function carregarFinanceiro() {
 
     const [saldo, extrato, despesas] = await Promise.all([
-        carregarAba("Saldo"),
-        carregarAba("Extrato"),
-        carregarAba("Financeiro")
+        carregarAba(GIDS.saldo),
+        carregarAba(GIDS.extrato),
+        carregarAba(GIDS.financeiro)
     ]);
 
     const arred = n => Math.round(n * 100) / 100;
@@ -1390,7 +1423,7 @@ async function atualizar() {
             throw new Error("Nenhuma aba carregou");
 
         document.getElementById("erro").innerHTML = falhas.length
-            ? `<div class="erro">Algumas abas não puderam ser carregadas (${falhas.length}). Tente atualizar a página.</div>`
+            ? `<div class="erro">Algumas abas não puderam ser carregadas:<br>${falhas.map(f => "• " + escapar(f.reason?.message || f.reason)).join("<br>")}</div>`
             : "";
 
         document.getElementById(
