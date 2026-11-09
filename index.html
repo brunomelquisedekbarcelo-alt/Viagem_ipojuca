@@ -164,6 +164,184 @@
     text-align:right;
 }
 
+/* ---------- Passageiros: link no nome + visualizador ---------- */
+
+.dica-cartao{
+    font-size:14px;
+    color:#555;
+    margin-bottom:10px;
+}
+
+.link-cartao{
+    background:none;
+    border:none;
+    padding:0;
+    font:inherit;
+    color:#0f766e;
+    font-weight:bold;
+    text-decoration:underline;
+    text-underline-offset:3px;
+    cursor:pointer;
+    text-align:left;
+}
+
+.link-cartao:hover{
+    color:#134e4a;
+}
+
+.visor{
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    background:rgba(15,23,42,.85);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+}
+
+.visor[hidden]{
+    display:none;
+}
+
+.visor-caixa{
+    background:#111827;
+    color:white;
+    border-radius:14px;
+    width:min(960px,100%);
+    height:min(92vh,100%);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    box-shadow:0 10px 40px rgba(0,0,0,.5);
+}
+
+.visor-topo{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    padding:12px 16px;
+    border-bottom:1px solid #374151;
+}
+
+.visor-titulo{
+    font-weight:bold;
+    font-size:16px;
+}
+
+.visor-contador{
+    font-size:12px;
+    color:#9ca3af;
+}
+
+.visor-acoes{
+    display:flex;
+    gap:8px;
+}
+
+.visor-acoes a,
+.visor-acoes button{
+    width:38px;
+    height:38px;
+    border-radius:8px;
+    border:none;
+    background:#374151;
+    color:white;
+    font-size:18px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-decoration:none;
+}
+
+.visor-acoes a:hover,
+.visor-acoes button:hover{
+    background:#4b5563;
+}
+
+.visor-corpo{
+    flex:1;
+    display:flex;
+    align-items:stretch;
+    min-height:0;
+}
+
+.visor-seta{
+    width:48px;
+    flex-shrink:0;
+    border:none;
+    background:transparent;
+    color:white;
+    font-size:40px;
+    cursor:pointer;
+}
+
+.visor-seta:hover:not(:disabled){
+    background:rgba(255,255,255,.08);
+}
+
+.visor-seta:disabled{
+    opacity:.2;
+    cursor:default;
+}
+
+.visor-conteudo{
+    flex:1;
+    min-width:0;
+    overflow:auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#0b1220;
+}
+
+.visor-conteudo img{
+    max-width:100%;
+    max-height:100%;
+    object-fit:contain;
+    cursor:zoom-in;
+    background:white;
+}
+
+.visor-conteudo.zoom{
+    align-items:flex-start;
+    justify-content:flex-start;
+}
+
+.visor-conteudo.zoom img{
+    max-width:none;
+    max-height:none;
+    width:200%;
+    cursor:zoom-out;
+}
+
+.visor-conteudo iframe{
+    width:100%;
+    height:100%;
+    border:none;
+    background:white;
+}
+
+.visor-carregando{
+    color:#9ca3af;
+}
+
+.visor-rodape{
+    font-size:12px;
+    color:#9ca3af;
+    text-align:center;
+    padding:8px;
+    border-top:1px solid #374151;
+}
+
+@media (max-width:560px){
+    .visor{ padding:0; }
+    .visor-caixa{ border-radius:0; height:100%; }
+    .visor-seta{ width:34px; font-size:30px; }
+}
+
 .legenda-cores{
     display:flex;
     flex-wrap:wrap;
@@ -511,6 +689,27 @@ onclick="abrirAba('financeiro',this)">
 
 </div>
 
+<div id="visor" class="visor" hidden onclick="if(event.target===this)fecharCartao()">
+    <div class="visor-caixa" role="dialog" aria-modal="true" aria-labelledby="visorTitulo">
+        <div class="visor-topo">
+            <div>
+                <div class="visor-titulo" id="visorTitulo"></div>
+                <div class="visor-contador" id="visorContador"></div>
+            </div>
+            <div class="visor-acoes">
+                <a id="visorAbrir" href="#" target="_blank" rel="noopener" title="Abrir no Google Drive">↗</a>
+                <button id="visorFechar" onclick="fecharCartao()" title="Fechar (Esc)" aria-label="Fechar">✕</button>
+            </div>
+        </div>
+        <div class="visor-corpo">
+            <button class="visor-seta" id="visorAnterior" onclick="abrirCartao(cartaoAtual-1)" aria-label="Anterior">‹</button>
+            <div class="visor-conteudo" id="visorConteudo"></div>
+            <button class="visor-seta" id="visorProximo" onclick="abrirCartao(cartaoAtual+1)" aria-label="Próximo">›</button>
+        </div>
+        <div class="visor-rodape">Toque na imagem para ampliar · Esc para fechar</div>
+    </div>
+</div>
+
 <script>
 
 const SHEET_ID = "1nIWKndBOY-c6DL4pil-ZI1sXgCGO1eOZddWOnWanQjI";
@@ -534,6 +733,93 @@ const GIDS = {
 let mapa = null;
 let camadaMarcadores = null;
 let dadosPassageiros = { cabecalho: [], linhas: [] };
+let cartoesEmbarque = [];
+let cartaoAtual = -1;
+
+/* ===================== VISUALIZADOR DE CARTÃO DE EMBARQUE ===================== */
+
+function idDrive(url) {
+    const m = String(url).match(/\/d\/([\w-]{10,})/) || String(url).match(/[?&]id=([\w-]{10,})/);
+    return m ? m[1] : null;
+}
+
+function abrirCartao(i) {
+    if (i < 0 || i >= cartoesEmbarque.length) return;
+    cartaoAtual = i;
+
+    const { nome, link } = cartoesEmbarque[i];
+    const id = idDrive(link);
+    const area = document.getElementById("visorConteudo");
+
+    document.getElementById("visorTitulo").textContent = nome;
+    document.getElementById("visorContador").textContent =
+        cartoesEmbarque.length > 1 ? `${i + 1} de ${cartoesEmbarque.length}` : "";
+    document.getElementById("visorAbrir").href = link;
+    document.getElementById("visorAnterior").disabled = i === 0;
+    document.getElementById("visorProximo").disabled = i === cartoesEmbarque.length - 1;
+
+    area.classList.remove("zoom");
+    area.innerHTML = `<div class="visor-carregando">Carregando…</div>`;
+
+    // Tenta mostrar como imagem; se não der (ex.: PDF), usa o visualizador do Drive
+    const fallback = () => {
+        const src = id ? `https://drive.google.com/file/d/${id}/preview` : link;
+        area.innerHTML = `<iframe src="${escapar(src)}" allow="autoplay" title="Cartão de embarque de ${escapar(nome)}"></iframe>`;
+    };
+
+    const ehImagemDireta = /\.(png|jpe?g|webp|gif)(\?|$)/i.test(link);
+    if (!id && !ehImagemDireta) { fallback(); }
+    else {
+        const img = new Image();
+        img.alt = `Cartão de embarque de ${nome}`;
+        const limite = setTimeout(() => {
+            if (cartaoAtual === i && !img.complete) { img.onload = img.onerror = null; fallback(); }
+        }, 6000);
+        img.onload = () => {
+            clearTimeout(limite);
+            if (cartaoAtual !== i) return;
+            area.innerHTML = "";
+            area.appendChild(img);
+            img.onclick = () => area.classList.toggle("zoom");
+        };
+        img.onerror = () => { clearTimeout(limite); if (cartaoAtual === i) fallback(); };
+        img.src = id ? `https://lh3.googleusercontent.com/d/${id}=w2000` : link;
+    }
+
+    const visor = document.getElementById("visor");
+    visor.hidden = false;
+    document.body.style.overflow = "hidden";
+    document.getElementById("visorFechar").focus();
+}
+
+function fecharCartao() {
+    document.getElementById("visor").hidden = true;
+    document.getElementById("visorConteudo").innerHTML = "";
+    document.body.style.overflow = "";
+    cartaoAtual = -1;
+}
+
+document.addEventListener("keydown", e => {
+    if (document.getElementById("visor")?.hidden !== false) return;
+    if (e.key === "Escape") fecharCartao();
+    if (e.key === "ArrowLeft") abrirCartao(cartaoAtual - 1);
+    if (e.key === "ArrowRight") abrirCartao(cartaoAtual + 1);
+});
+
+// Deslizar para os lados no celular troca de cartão
+(() => {
+    let x0 = null;
+    document.addEventListener("touchstart", e => {
+        if (!document.getElementById("visor")?.hidden) x0 = e.touches[0].clientX;
+    }, { passive: true });
+    document.addEventListener("touchend", e => {
+        if (x0 === null || document.getElementById("visor")?.hidden) return;
+        const dx = e.changedTouches[0].clientX - x0;
+        x0 = null;
+        if (document.getElementById("visorConteudo").classList.contains("zoom")) return;
+        if (Math.abs(dx) > 60) abrirCartao(cartaoAtual + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+})();
 
 function abrirAba(id, btn) {
 
@@ -873,24 +1159,40 @@ async function carregarPassageiros() {
 
     const idxCPF = cabecalho.findIndex(h => /cpf/i.test(h));
 
-    // Remove colunas totalmente vazias
+    // Coluna do cartão de embarque: pelo título ou, se não achar, a que tem links
+    let idxLink = cabecalho.findIndex(h => /cart[aã]o|embarque|link/i.test(h));
+    if (idxLink < 0)
+        idxLink = cabecalho.findIndex((h, i) =>
+            rows.some(r => /^https?:\/\//i.test(String(r.c?.[i]?.v ?? ""))));
+
+    // Remove colunas totalmente vazias e a coluna do link (ele vai no nome)
     const colunasUsadas = cabecalho
         .map((h, i) => i)
+        .filter(i => i !== idxLink)
         .filter(i => cabecalho[i] || rows.some(r => valorCelula(r.c?.[i]) !== ""));
 
     const linhas = rows
         .filter(r => r.c && r.c.some(c => c && c.v != null && c.v !== ""))
-        .map(r => colunasUsadas.map(i => {
-            const v = i === idxCPF
-                ? formatarCPF(r.c[i]?.v)
-                : valorCelula(r.c[i]);
-            return String(v);
-        }));
+        .map(r => {
+            const valores = colunasUsadas.map(i => {
+                const v = i === idxCPF
+                    ? formatarCPF(r.c[i]?.v)
+                    : valorCelula(r.c[i]);
+                return String(v);
+            });
+            const link = idxLink >= 0 ? String(r.c[idxLink]?.v ?? "").trim() : "";
+            return { valores, link: /^https?:\/\//i.test(link) ? link : "" };
+        });
 
     dadosPassageiros = {
         cabecalho: colunasUsadas.map(i => cabecalho[i] || `Coluna ${i + 1}`),
         linhas
     };
+
+    // Lista usada pelo visualizador (setas anterior/próximo)
+    cartoesEmbarque = linhas
+        .filter(l => l.link)
+        .map(l => ({ nome: l.valores[0], link: l.link }));
 
     const card = document.querySelector("#passageiros .card");
 
@@ -921,17 +1223,30 @@ function renderizarPassageiros() {
 
     const filtradas = linhas.filter(l => {
         if (!termo) return true;
-        return l.some(v => {
+        return l.valores.some(v => {
             const t = v.toLowerCase();
             return t.includes(termo) ||
                 (termoNum && t.replace(/\D/g, "").includes(termoNum));
         });
     });
 
-    let html = `<table><tr><th>#</th>${cabecalho.map(h => `<th>${escapar(h)}</th>`).join("")}</tr>`;
+    const comCartao = linhas.filter(l => l.link).length;
+
+    let html = comCartao
+        ? `<p class="dica-cartao">🎫 Toque no nome para ver o cartão de embarque.</p>`
+        : "";
+
+    html += `<table><tr><th>#</th>${cabecalho.map(h => `<th>${escapar(h)}</th>`).join("")}</tr>`;
 
     filtradas.forEach((l, i) => {
-        html += `<tr><td>${i + 1}</td>${l.map(v => `<td>${escapar(v)}</td>`).join("")}</tr>`;
+        const celulas = l.valores.map((v, j) => {
+            if (j === 0 && l.link) {
+                const pos = cartoesEmbarque.findIndex(c => c.link === l.link && c.nome === v);
+                return `<td><button class="link-cartao" onclick="abrirCartao(${pos})">🎫 ${escapar(v)}</button></td>`;
+            }
+            return `<td>${escapar(v)}</td>`;
+        }).join("");
+        html += `<tr><td>${i + 1}</td>${celulas}</tr>`;
     });
 
     html += "</table>";
